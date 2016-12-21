@@ -1,101 +1,293 @@
-﻿using System.Data.Entity;
+﻿using System;
+using System.Collections.Generic;
+using System.Data.Entity;
 using System.Linq;
+using System.Web;
 using System.Web.Mvc;
+using Microsoft.AspNet.Identity;
+using Newtonsoft.Json;
 using Task1.Model;
-using Task1.Web.Enums;
-using Task1.Web.Infrastracture.Extensions;
 using Task1.Web.Models;
-using WebGrease.Css.Extensions;
 
 namespace Task1.Web.Controllers {
   [Authorize]
-  public class HomeController : ControllerBase {
-    private readonly IRepository _repository;
-
-    public HomeController(IRepository repository) {
-      _repository = repository;
-    }
-
+  public class HomeController:Controller {
     public ActionResult Index() {
       return View();
     }
 
     public JsonResult GetPosts() {
-      return JsonEx(
-        User.IsInRole(UserRoles.Admin.ToString())
-          ? _repository.Get<Post>().OrderByDescending(x => x.CreatedOn).To<PostVm>()
-          : _repository.Get<Post>(x => !x.IsDeleted).OrderByDescending(x => x.CreatedOn).To<PostVm>());
+      var repo = new Repository(new Task1DbContext());
+
+      if (User.IsInRole("Admin")) {
+        var list=repo.Get<Post>().OrderByDescending(x => x.CreatedOn).ToList();
+        
+        var listResult=new List<PostVm>();
+
+        list.ForEach(x => {
+          listResult.Add(new PostVm {
+            Id = x.Id,
+            CreatedOn = x.CreatedOn,
+            IsDeleted = x.IsDeleted,
+            UserName = x.User.UserName,
+            Text = x.Text,
+            UserId = x.UserId,
+            Comments = x.Comment.Select(y=>new CommentVm {
+              Id = y.Id,
+              CreatedOn = y.CreatedOn,
+              UserName = y.User.UserName,
+              IsDeleted = y.IsDeleted,
+              IsRecentlyCreated = true,
+              PostId = y.PostId.Value,
+              Text = y.Text,
+              UserId = y.UserId
+            }).ToList()
+          });
+        });
+        return new JsonNetResult { Data = listResult, JsonRequestBehavior = JsonRequestBehavior.AllowGet };
+      }
+      else {
+        var list = repo.Get<Post>(x => !x.IsDeleted).OrderByDescending(x => x.CreatedOn).ToList();
+        var listResult = new List<PostVm>();
+
+        list.ForEach(x => {
+          listResult.Add(new PostVm
+          {
+            Id = x.Id,
+            CreatedOn = x.CreatedOn,
+            IsDeleted = x.IsDeleted,
+            UserId = x.UserId,
+            UserName = x.User.UserName,
+            Text = x.Text,
+            Comments = x.Comment.Select(y => new CommentVm
+            {
+              Id = y.Id,
+              CreatedOn = y.CreatedOn,
+              UserName = y.User.UserName,
+              IsDeleted = y.IsDeleted,
+              IsRecentlyCreated = true,
+              PostId = y.PostId.Value,
+              Text = y.Text,
+              UserId = y.UserId
+            }).ToList()
+          });
+        });
+        return new JsonNetResult { Data = listResult, JsonRequestBehavior = JsonRequestBehavior.AllowGet };
+      }
     }
 
     [HttpPost]
     public JsonResult SavePost(PostVm postVm) {
-      var post = postVm.To<Post>();
+      var post = new Post {
+        IsDeleted = postVm.IsDeleted,
+        Text = postVm.Text,
+        Id = postVm.Id,
+        UserId = postVm.UserId,
+        CreatedOn = postVm.CreatedOn
+      };
 
-      var isNew = post.Id < 1;
+      var repo = new Repository(new Task1DbContext());
 
-      if (isNew) {
-        post.UserId = GetCurrentUserId();
-        _repository.Add(post);
+      if (post.Id < 1) {
+        post.UserId = User.Identity.GetUserId<int>();
+        post.CreatedOn=DateTime.UtcNow;
+        post.ModifiedOn=DateTime.UtcNow;
+
+        repo.Add(post);
+        repo.Commit();
       }
       else {
-        _repository.Update(post);
-      }
-      _repository.Commit();
+        post.CreatedOn = DateTime.UtcNow;
+        post.ModifiedOn = DateTime.UtcNow;
 
-      var result = _repository.Get<Post>(x => x.Id == post.Id).Include(x => x.User).Include(x => x.Comment).First().To<PostVm>();
-      return JsonEx(result);
+        repo.Update(post);
+        repo.Commit();
+      }
+
+      var result = repo.Get<Post>(x => x.Id == post.Id).Include(x => x.User).Include(x => x.Comment).First();
+      var resultViewModel = new PostVm {
+        Id = result.Id,
+        CreatedOn = result.CreatedOn,
+        IsDeleted = result.IsDeleted,
+        UserId = result.UserId,
+        Text = result.Text,
+        UserName = result.User.UserName,
+        Comments = result.Comment.Select(y => new CommentVm
+        {
+          Id = y.Id,
+          CreatedOn = y.CreatedOn,
+          UserName = y.User.UserName,
+          IsDeleted = y.IsDeleted,
+          IsRecentlyCreated = y.CreatedOn.AddHours(1) > DateTime.UtcNow,
+          PostId = y.PostId.Value,
+          UserId = y.UserId,
+          Text = y.Text
+        }).ToList()
+      };
+
+      return new JsonNetResult { Data = resultViewModel, JsonRequestBehavior = JsonRequestBehavior.AllowGet };
     }
 
 
     [HttpPost]
     public JsonResult RemovePost(int postId) {
-      var post = _repository.Get<Post>(x => x.Id == postId).Include(x => x.Comment).First();
+      var repo = new Repository(new Task1DbContext());
+
+      var post = repo.Get<Post>(x => x.Id == postId).Include(x => x.Comment).First();
       post.IsDeleted = true;
 
-      post.Comment.ForEach(c => c.IsDeleted = true);
+      post.Comment.ToList().ForEach(c => c.IsDeleted = true);
 
-      _repository.Update(post);
-      _repository.Commit();
+      repo.Update(post);
+      repo.Commit();
 
-      return
-        JsonEx(
-          _repository.Get<Post>(x => x.Id == postId).Include(x => x.Comment).Include(x => x.User).First().To<PostVm>());
+     var updated = repo.Get<Post>(x => x.Id == postId).Include(x => x.Comment).Include(x => x.User).First();
+      var result = new PostVm {
+        Id = updated.Id,
+        CreatedOn = updated.CreatedOn,
+        UserId = updated.UserId,
+        IsDeleted = updated.IsDeleted,
+        Text = updated.Text,
+        UserName = updated.User.UserName,
+        Comments = updated.Comment.Select(y => new CommentVm
+        {
+          Id = y.Id,
+          CreatedOn = y.CreatedOn,
+          UserName = y.User.UserName,
+          IsDeleted = y.IsDeleted,
+          IsRecentlyCreated = y.CreatedOn.AddHours(1) > DateTime.UtcNow,
+          PostId = y.PostId.Value,
+          UserId = y.UserId,
+          Text = y.Text
+        }).ToList()
+
+      };
+
+      return new JsonNetResult { Data = result, JsonRequestBehavior = JsonRequestBehavior.AllowGet };
     }
 
     [HttpPost]
     public JsonResult RemoveComment(int commentId) {
-      var comment = _repository.Get<Comment>(commentId);
-      comment.IsDeleted = true;
-      _repository.Update(comment);
-      _repository.Commit();
+      var repo = new Repository(new Task1DbContext());
 
-      return JsonEx(_repository.Get<Comment>(x => x.Id == commentId).Include(x => x.User).First().To<CommentVm>());
+      var comment = repo.Get<Comment>(commentId);
+      comment.IsDeleted = true;
+      repo.Update(comment);
+      repo.Commit();
+
+      var updated = repo.Get<Comment>(x => x.Id == comment.Id).Include(x => x.User).First();
+
+      var result = new CommentVm {
+        CreatedOn = updated.CreatedOn,
+        Text = updated.Text,
+        Id = updated.Id,
+        IsDeleted = updated.IsDeleted,
+        UserName = updated.User.UserName,
+        UserId = updated.UserId,
+        IsRecentlyCreated = updated.CreatedOn.AddHours(1) > DateTime.UtcNow,
+        PostId = updated.PostId.Value
+      };
+      return new JsonNetResult { Data = result, JsonRequestBehavior = JsonRequestBehavior.AllowGet };
     }
 
     [HttpPost]
     public JsonResult SaveComment(CommentVm commentVm) {
-      var comment = commentVm.To<Comment>();
+      var repo = new Repository(new Task1DbContext());
 
-      var isNew = comment.Id < 1;
+      var comment = new Comment
+      {
+        CreatedOn = commentVm.CreatedOn,
+        Text = commentVm.Text,
+        Id = commentVm.Id,
+        IsDeleted = commentVm.IsDeleted,
+        UserId = commentVm.UserId,
+        PostId = commentVm.PostId
+      };
 
-      if (isNew) {
-        comment.UserId = GetCurrentUserId();
-        _repository.Add(comment);
+      if (comment.Id < 1) {
+        comment.CreatedOn = DateTime.UtcNow;
+        comment.ModifiedOn = DateTime.UtcNow;
+        comment.UserId = User.Identity.GetUserId<int>();
+        repo.Add(comment);
+        repo.Commit();
       }
       else {
-        _repository.Update(comment);
+        comment.CreatedOn = DateTime.UtcNow;
+        comment.ModifiedOn = DateTime.UtcNow;
+        repo.Update(comment);
+        repo.Commit();
       }
-      _repository.Commit();
 
-      var result = _repository.Get<Comment>(x => x.Id == comment.Id).Include(x => x.User).First().To<CommentVm>();
-      return JsonEx(result);
+      var result = repo.Get<Comment>(x => x.Id == comment.Id).Include(x => x.User).First();
+
+      var result2 = new CommentVm
+      {
+        CreatedOn = result.CreatedOn,
+        Text = result.Text,
+        Id = result.Id,
+        IsDeleted = result.IsDeleted,
+        UserName = result.User.UserName,
+        UserId = result.UserId,
+        IsRecentlyCreated = result.CreatedOn.AddHours(1) > DateTime.UtcNow,
+        PostId = result.PostId.Value
+      };
+      return new JsonNetResult { Data = result2, JsonRequestBehavior = JsonRequestBehavior.AllowGet };
     }
 
     [AllowAnonymous]
     public JsonResult GetCurrentUser() {
-      var userId = GetCurrentUserId();
-      var user = userId == 0 ? null : _repository.Get<User>(x => x.Id == userId).Include(u => u.Role).First();
-      return JsonEx(user.To<UserVm>());
+      var repo = new Repository(new Task1DbContext());
+
+      var userId = User.Identity.GetUserId<int>();
+      var user = userId == 0 ? null : repo.Get<User>(x => x.Id == userId).Include(u => u.Role).First();
+
+      var userView = new UserVm {
+        UserName = user.UserName,
+        Id = user.Id,
+        CanSeeDeleted = user.Role.Select(x=>x.Name).ToList().Contains("Admin"),
+        CanAddPosts = user.Role.Select(x => x.Name).ToList().Contains("Admin"),
+        CanDeleteComments = user.Role.Select(x => x.Name).ToList().Contains("Admin") && user.Role.Select(x => x.Name).ToList().Contains("Manager"),
+        CanEditComments = user.Role.Select(x => x.Name).ToList().Contains("Admin") && user.Role.Select(x => x.Name).ToList().Contains("Manager"),
+        CanDeletePosts = user.Role.Select(x => x.Name).ToList().Contains("Admin") && user.Role.Select(x => x.Name).ToList().Contains("Manager"),
+        CanEditPosts = user.Role.Select(x => x.Name).ToList().Contains("Admin") && user.Role.Select(x => x.Name).ToList().Contains("Manager")
+      };
+
+      userView.Roles = "";
+
+      user.Role.Select(x => x.Name).ToList().ForEach(x => {
+        userView.Roles += (x + ",");
+      });
+      return new JsonNetResult { Data = userView, JsonRequestBehavior = JsonRequestBehavior.AllowGet };
+    }
+  }
+
+
+
+
+  public class JsonNetResult : JsonResult {
+    public override void ExecuteResult(ControllerContext context)
+    {
+      HttpResponseBase response = context.HttpContext.Response;
+      response.ContentType = "application/json";
+      if (ContentEncoding != null)
+        response.ContentEncoding = ContentEncoding;
+      if (Data != null)
+      {
+        JsonTextWriter writer = new JsonTextWriter(response.Output)
+        {
+          Formatting = Formatting.Indented,
+          DateTimeZoneHandling = DateTimeZoneHandling.Utc,
+          DateFormatHandling = DateFormatHandling.IsoDateFormat
+        };
+        JsonSerializer serializer = JsonSerializer.Create(new JsonSerializerSettings
+        {
+          DateTimeZoneHandling = DateTimeZoneHandling.Utc,
+          ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+          DateFormatHandling = DateFormatHandling.IsoDateFormat
+        });
+        serializer.Serialize(writer, Data);
+        writer.Flush();
+      }
     }
   }
 }
