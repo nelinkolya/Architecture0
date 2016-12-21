@@ -1,0 +1,41 @@
+﻿<p class="lead">
+    <div class="row" ng-if="vm.currentUser.CanAddPosts">
+        <button class="btn btn-xs btn-primary pull-right" ng-click="vm.actions.toggleCreatingPost()">Create new post</button>
+        <button ng-if="vm.currentUser.CanSeeDeleted && !vm.hideDeleted" class="btn btn-xs btn-primary" ng-click="vm.actions.hideDeleted()">Hide deleted</button>
+        <button ng-if="vm.currentUser.CanSeeDeleted && vm.hideDeleted" class="btn btn-xs btn-primary" ng-click="vm.actions.showDeleted()">Show deleted</button>
+    </div>
+    <div class="row create_new_post_section" ng-if="vm.newPost.creating">
+        <div class="col-md-12 ">
+            <textarea class="form-control" ng-model="vm.newPost.Text"></textarea>
+            <button class="btn btn-primary btn-xs" ng-click="vm.actions.savePost(vm.newPost)" ng-disabled="vm.newPost.saving || !vm.newPost.Text">Save</button>
+        </div>
+    </div>
+    <div ng-repeat="item in vm.posts" class="post_area" ng-hide="item.IsDeleted && vm.hideDeleted">
+        <div class="row" ng-class="[{deleted:item.IsDeleted}]">
+            <div class="col-md-1">
+                <span ng-bind="item.UserName"></span>
+            </div>
+            <div class="col-md-4">
+                <span ng-bind="item.CreatedOn"></span>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-12">
+                <span ng-if="!item.isEditing" class="post_text" ng-class="[{deleted:item.IsDeleted}]" ng-bind="item.Text"></span>
+                <textarea ng-if="item.isEditing" ng-model="item.Text"></textarea>
+            </div>
+            <button class="btn btn-primary btn-xs" ng-if="!item.isEditing && !item.IsDeleted" ng-click="vm.actions.toggleAddingComment(item)">Add comment</button>
+
+            <button ng-cloak class="btn btn-xs pull-right" ng-if="!item.IsDeleted && vm.currentUser.CanDeletePosts && !item.isEditing" ng-click="vm.actions.removePost(item)">Delete Post</button>
+            <button class="btn btn-primary btn-xs pull-right" ng-if="!item.IsDeleted && vm.currentUser.CanEditPosts && !item.isEditing" ng-click="item.isEditing=true">Edit Post</button>
+            <button class="btn btn-primary btn-xs pull-right" ng-if="item.isEditing" ng-click="vm.actions.savePost(item);item.isEditing=false;">Save Post</button>
+        </div>
+        <div class="row create_new_comment_section" ng-if="item.newComment.creating">
+            <div class="col-md-12 ">
+                <textarea class="form-control" ng-model="item.newComment.Text"></textarea>
+                <button class="btn btn-primary btn-xs" ng-click="vm.actions.saveComment(item)" ng-disabled="item.newComment.saving || !item.newComment.Text">Save Comment</button>
+            </div>
+        </div>
+        <div ng-include="'/Scripts/app/comments.html'"></div>
+    </div>
+</p>

@@ -1,0 +1,27 @@
+﻿<div class="comments" ng-repeat="comment in item.Comments" ng-class="[{deleted:comment.IsDeleted}]" ng-if="!comment.IsDeleted || vm.currentUser.CanSeeDeleted">
+    <div class="row">
+        <div class="col-md-1"></div>
+        <div class="col-md-1">
+            <span ng-bind="comment.UserName"></span>
+        </div>
+        <div class="col-md-2">
+            <timer ng-if="!comment.IsDeleted && comment.IsRecentlyCreated" max-time-unit="'year'" start-time="comment.CreatedOn" interval="10000">{{yearUnit == '0' ? 'moment ago' : (yearUnit + ' ago')}}</timer>
+            <span ng-if="comment.IsDeleted || !comment.IsRecentlyCreated" ng-bind="comment.CreatedOn"></span>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-1"></div>
+        <div class="col-md-8">
+            <span ng-if="!comment.isEditing" class="comment_text" ng-bind="comment.Text"></span>
+            <textarea ng-if="comment.isEditing" ng-model="comment.Text"></textarea>
+        </div>
+    </div>
+    <div class="row action_btn_section">
+        <div class="col-md-6"></div>
+        <div class="col-md-3">
+            <button class="btn btn-xs pull-right" ng-if="vm.currentUser.CanDeleteComments && !(comment.isEditing || comment.IsDeleted)" ng-click="vm.actions.removeComment(item,comment)">Delete</button>
+            <button class="btn btn-primary btn-xs pull-right" ng-if="vm.currentUser.CanEditComments && !(comment.isEditing || comment.IsDeleted)" ng-click="comment.isEditing=true">Edit</button>
+            <button class="btn btn-primary btn-xs pull-right" ng-if="comment.isEditing" ng-click="vm.actions.saveComment(item,comment);comment.isEditing=false;">Save Comment</button>
+        </div>
+    </div>
+</div>

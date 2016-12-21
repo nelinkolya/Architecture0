@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<edmx:Edmx Version="3.0" xmlns:edmx="http://schemas.microsoft.com/ado/2009/11/edmx">
+ <!-- EF Designer content (DO NOT EDIT MANUALLY BELOW HERE) -->
+  <edmx:Designer xmlns="http://schemas.microsoft.com/ado/2009/11/edmx">
+    <!-- Diagram content (shape and connector positions) -->
+    <edmx:Diagrams>
+      <Diagram DiagramId="9eda727e39ca4393a4257fc6a2bc1166" Name="Diagram1">
+        <EntityTypeShape EntityType="Task1Model.User" Width="1.5" PointX="0.75" PointY="2.875" />
+        <EntityTypeShape EntityType="Task1Model.Role" Width="1.5" PointX="0.75" PointY="0.75" />
+        <AssociationConnector Association="Task1Model.UserRole" />
+        <EntityTypeShape EntityType="Task1Model.Comment" Width="1.5" PointX="5.25" PointY="5" />
+        <EntityTypeShape EntityType="Task1Model.Post" Width="1.5" PointX="3" PointY="7.375" />
+        <AssociationConnector Association="Task1Model.FK_Comment_Post" />
+        <AssociationConnector Association="Task1Model.FK_Comment_User" />
+        <AssociationConnector Association="Task1Model.FK_Post_User" />
+      </Diagram>
+    </edmx:Diagrams>
+  </edmx:Designer>
+</edmx:Edmx>
